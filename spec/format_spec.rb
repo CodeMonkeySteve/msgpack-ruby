@@ -3,223 +3,194 @@ require 'spec_helper'
 
 describe MessagePack do
   it "nil" do
-    check 1, nil
+    nil.to_msgpack.should == "\xc0"
   end
 
-  it "true" do
-    check 1, true
+  it "Boolean" do
+    false.to_msgpack.should == "\xc2"
+    true.to_msgpack.should == "\xc3"
   end
 
-  it "false" do
-    check 1, false
+  describe "Integer" do
+    it "positive fixnum" do
+      0.to_msgpack.should == "\x00"
+      1.to_msgpack.should == "\x01"
+      ((1<<7)-1).to_msgpack.should == "\x7f"
+      (1<<7).to_msgpack.size.should == 2
+    end
+
+    it "negative fixnum" do
+      -1.to_msgpack.should == "\xff"
+      (- (1<<5)).to_msgpack.should == "\xe0"
+      (-((1<<5)+1)).to_msgpack.size.should == 2
+    end
+
+    it "uint 8" do
+      (1<<7).to_msgpack.should == "\xcc\x80"
+      ((1<<8)-1).to_msgpack.should ==  "\xcc\xff"
+      (1<<8).to_msgpack.size.should == 3
+    end
+
+    it "uint 16" do
+      (1<<15).to_msgpack.should == "\xcd\x80\x00"
+      ((1<<16)-1).to_msgpack.should == "\xcd\xff\xff"
+      (1<<16).to_msgpack.size.should == 5
+    end
+
+    it "uint 32" do
+      (1<<16).to_msgpack.should == "\xce\x00\x01\x00\x00"
+      ((1<<32)-1).to_msgpack.should == "\xce\xff\xff\xff\xff"
+      (1<<32).to_msgpack.size.should == 9
+    end
+
+    it "uint 64" do
+      (1<<32).to_msgpack.should == "\xcf\x00\x00\x00\x01\x00\x00\x00\x00"
+      ((1<<64)-1).to_msgpack.should == "\xcf\xff\xff\xff\xff\xff\xff\xff\xff"
+    end
+
+    it "int 8" do
+      (-((1<<5)+1)).to_msgpack.should == "\xd0\xdf"
+      (-(1<<7)).to_msgpack.should == "\xd0\x80"
+      (-((1<<7)+1)).to_msgpack.size.should == 3
+    end
+
+    it "int 16" do
+      (-((1<<7)+1)).to_msgpack.should == "\xd1\xff\x7f"
+      (-(1<<15)).to_msgpack.should == "\xd1\x80\x00"
+      (-((1<<15)+1)).to_msgpack.size.should == 5
+    end
+
+    it "int 32" do
+      (-((1<<15)+1)).to_msgpack.should == "\xd2\xff\xff\x7f\xff"
+      (-(1<<31)).to_msgpack.should == "\xd2\x80\x00\x00\x00"
+      (-((1<<31)+1)).to_msgpack.size.should == 9
+    end
+
+    it "int 64" do
+      (-((1<<31)+1)).to_msgpack.should == "\xd3\xff\xff\xff\xff\x7f\xff\xff\xff"
+      (-(1<<63)).to_msgpack.should == "\xd3\x80\x00\x00\x00\x00\x00\x00\x00"
+    end
   end
 
-  it "zero" do
-    check 1, 0
+  describe "Float" do
+    it "float 64" do
+      1.0.to_msgpack.should == "\xcb\x3f\xf0\x00\x00\x00\x00\x00\x00"
+    end
   end
 
-  it "positive fixnum" do
-    check 1, 1
-    check 1, (1<<6)
-    check 1, (1<<7)-1
+  describe "String" do
+    it "fixstr" do
+      ''.to_msgpack.should == "\xa0"
+      'hello'.to_msgpack.should == "\xa5hello"
+      ('X'*((1<<5)-1)).to_msgpack.size.should == 1+((1<<5)-1)
+      ('X'*(1<<5)).to_msgpack.size.should == 1+1+(1<<5)
+    end
+
+    it "str 8" do
+      ('X'*(1<<5)).to_msgpack.should == "\xd9\x20#{'X'*32}"
+      ('X'*((1<<8)-1)).to_msgpack.should == "\xd9\xff#{'X'*((1<<8)-1)}"
+      ('X'*(1<<8)).to_msgpack.size.should == 1+2+(1<<8)
+    end
+
+    it "str 16" do
+      ('X'*(1<<8)).to_msgpack.should == "\xda\x01\x00#{'X'*256}"
+      ('X'*((1<<16)-1)).to_msgpack.should == "\xda\xff\xff#{'X'*((1<<16)-1)}"
+      ('X'*(1<<16)).to_msgpack.size.should == 1+4+(1<<16)
+    end
+
+    it "str 32" do
+      ('X'*(1<<16)).to_msgpack.should == "\xdb\x00\x01\x00\x00#{'X'*(1<<16)}"
+    end
   end
 
-  it "positive int 8" do
-    check 1, -1
-    check 2, (1<<7)
-    check 2, (1<<8)-1
+  describe "Binary" do
+    skip "fixbin" do
+    end
+
+    skip "bin 8" do
+    end
+
+    skip "bin 16" do
+    end
+
+    skip "bin 32" do
+    end
   end
 
-  it "positive int 16" do
-    check 3, (1<<8)
-    check 3, (1<<16)-1
+  describe "Array" do
+    it "fixarray" do
+      array_n(0).to_msgpack.should == "\x90"
+      array_n((1<<4)-1).to_msgpack.should == "\x9f" + ("\x2a"*((1<<4)-1))
+      array_n((1<<4)).to_msgpack.size.should == 3+(1<<4)
+    end
+
+    it "array 16" do
+      array_n(1<<4).to_msgpack.should == "\xdc\x00\x10" + ("\x2a"*(1<<4))
+      array_n((1<<16)-1).to_msgpack.should == "\xdc\xff\xff" + ("\x2a"*((1<<16)-1))
+      array_n(1<<16).to_msgpack.size.should == 1+4+(1<<16)
+    end
+
+    it "array 32" do
+      array_n(1<<16).to_msgpack.should == "\xdd\x00\x01\x00\x00" + ("\x2a"*(1<<16))
+    end
   end
 
-  it "positive int 32" do
-    check 5, (1<<16)
-    check 5, (1<<32)-1
+  describe "Map" do
+    it "fixmap" do
+      {}.to_msgpack.should == "\x80"
+      map_n(1).to_msgpack.should == "\x81" + map_n_packed(1)
+      map_n((1<<4)-1).to_msgpack.should == "\x8f" + map_n_packed((1<<4)-1)
+      map_n(1<<4).to_msgpack.size.should == 3+((1<<4) * 2)
+    end
+
+    it "map 16" do
+      map_n(1<<4).to_msgpack.should == "\xde\x00\x10" + map_n_packed(1<<4)
+      map_n((1<<16)-1).to_msgpack.should == "\xde\xff\xff" + map_n_packed((1<<16)-1)
+    end
+
+    it "map 32" do
+      map_n(1<<16).to_msgpack.should == "\xdf\x00\x01\x00\x00" + map_n_packed(1<<16)
+    end
   end
 
-  it "positive int 64" do
-    check 9, (1<<32)
-    #check 9, (1<<64)-1
+  describe "Extended" do
+    skip "fixext 1" do
+    end
+
+    skip "fixext 2" do
+    end
+
+    skip "fixext 4" do
+    end
+
+    skip "fixext 8" do
+    end
+
+    skip "fixext 16" do
+    end
+
+    skip "ext 8" do
+    end
+
+    skip "ext 16" do
+    end
+
+    skip "ext 32" do
+    end
   end
 
-  it "negative fixnum" do
-    check 1, -1
-    check 1, -((1<<5)-1)
-    check 1, -(1<<5)
+
+  def array_n(n)
+    [42] * n
   end
 
-  it "negative int 8" do
-    check 2, -((1<<5)+1)
-    check 2, -(1<<7)
+  def map_n(n)
+    Hash[ (0...n).map { |v|  [v, 42] } ]
   end
-
-  it "negative int 16" do
-    check 3, -((1<<7)+1)
-    check 3, -(1<<15)
-  end
-
-  it "negative int 32" do
-    check 5, -((1<<15)+1)
-    check 5, -(1<<31)
-  end
-
-  it "negative int 64" do
-    check 9, -((1<<31)+1)
-    check 9, -(1<<63)
-  end
-
-  it "double" do
-    check 9, 1.0
-    check 9, 0.1
-    check 9, -0.1
-    check 9, -1.0
-  end
-
-  it "fixraw" do
-    check_raw 1, 0
-    check_raw 1, (1<<5)-1
-  end
-
-  it "raw 16" do
-    check_raw 3, (1<<5)
-    check_raw 3, (1<<16)-1
-  end
-
-  it "raw 32" do
-    check_raw 5, (1<<16)
-    #check_raw 5, (1<<32)-1  # memory error
-  end
-
-  it "fixarray" do
-    check_array 1, 0
-    check_array 1, (1<<4)-1
-  end
-
-  it "array 16" do
-    check_array 3, (1<<4)
-    #check_array 3, (1<<16)-1
-  end
-
-  it "array 32" do
-    #check_array 5, (1<<16)
-    #check_array 5, (1<<32)-1  # memory error
-  end
-
-  it "nil" do
-    match nil, "\xc0"
-  end
-
-  it "false" do
-    match false, "\xc2"
-  end
-
-  it "true" do
-    match true, "\xc3"
-  end
-
-  it "0" do
-    match 0, "\x00"
-  end
-
-  it "127" do
-    match 127, "\x7f"
-  end
-
-  it "128" do
-    match 128, "\xcc\x80"
-  end
-
-  it "256" do
-    match 256, "\xcd\x01\x00"
-  end
-
-  it "-1" do
-    match -1, "\xff"
-  end
-
-  it "-33" do
-    match -33, "\xd0\xdf"
-  end
-
-  it "-129" do
-    match -129, "\xd1\xff\x7f"
-  end
-
-  it "{1=>1}" do
-    obj = {1=>1}
-    match obj, "\x81\x01\x01"
-  end
-
-  it "1.0" do
-    match 1.0, "\xcb\x3f\xf0\x00\x00\x00\x00\x00\x00"
-  end
-
-  it "[]" do
-    match [], "\x90"
-  end
-
-  it "[0, 1, ..., 14]" do
-    obj = (0..14).to_a
-    match obj, "\x9f\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e"
-  end
-
-  it "[0, 1, ..., 15]" do
-    obj = (0..15).to_a
-    match obj, "\xdc\x00\x10\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
-  end
-
-  it "{}" do
-    obj = {}
-    match obj, "\x80"
-  end
-
-## FIXME
-#  it "{0=>0, 1=>1, ..., 14=>14}" do
-#    a = (0..14).to_a;
-#    match Hash[*a.zip(a).flatten], "\x8f\x05\x05\x0b\x0b\x00\x00\x06\x06\x0c\x0c\x01\x01\x07\x07\x0d\x0d\x02\x02\x08\x08\x0e\x0e\x03\x03\x09\x09\x04\x04\x0a\x0a"
-#  end
-#
-#  it "{0=>0, 1=>1, ..., 15=>15}" do
-#    a = (0..15).to_a;
-#    match Hash[*a.zip(a).flatten], "\xde\x00\x10\x05\x05\x0b\x0b\x00\x00\x06\x06\x0c\x0c\x01\x01\x07\x07\x0d\x0d\x02\x02\x08\x08\x0e\x0e\x03\x03\x09\x09\x0f\x0f\x04\x04\x0a\x0a"
-#  end
-
-## FIXME
-#  it "fixmap" do
-#    check_map 1, 0
-#    check_map 1, (1<<4)-1
-#  end
-#
-#  it "map 16" do
-#    check_map 3, (1<<4)
-#    check_map 3, (1<<16)-1
-#  end
-#
-#  it "map 32" do
-#    check_map 5, (1<<16)
-#    #check_map 5, (1<<32)-1  # memory error
-#  end
-
-  def check(len, obj)
-    raw = obj.to_msgpack.to_s
-    raw.length.should == len
-    MessagePack.unpack(raw).should == obj
-  end
-
-  def check_raw(overhead, num)
-    check num+overhead, " "*num
-  end
-
-  def check_array(overhead, num)
-    check num+overhead, Array.new(num)
-  end
-
-  def match(obj, buf)
-    raw = obj.to_msgpack.to_s
-    raw.should == buf
+  def map_n_packed(n)
+    packed = ''
+    (0...n).each { |i|  packed += i.to_msgpack + 42.to_msgpack }
+    packed
   end
 end
 
