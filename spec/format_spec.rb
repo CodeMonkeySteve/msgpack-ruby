@@ -183,30 +183,132 @@ describe MessagePack do
   end
 
   describe "Extended" do
-    skip "fixext 1" do
+    it "fixext 1" do
+      check_ext 2, 1, -128
+      check_ext 2, 1, 1
+      check_ext 2, 1, 127
     end
 
-    skip "fixext 2" do
+    it "fixext 2" do
+      check_ext 2, 2, -128
+      check_ext 2, 2, 1
+      check_ext 2, 2, 127
     end
 
-    skip "fixext 4" do
+    it "fixext 4" do
+      check_ext 2, 4, -128
+      check_ext 2, 4, 1
+      check_ext 2, 4, 127
     end
 
-    skip "fixext 8" do
+    it "fixext 8" do
+      check_ext 2, 8, -128
+      check_ext 2, 8, 1
+      check_ext 2, 8, 127
     end
 
-    skip "fixext 16" do
+    it "fixext 16" do
+      check_ext 2, 16, -128
+      check_ext 2, 16, 1
+      check_ext 2, 16, 127
     end
 
-    skip "ext 8" do
+
+    it "ext 8" do
+      check_ext 3, (1<<8) - 1, -128
+      check_ext 3, (1<<8) - 1, 1
+      check_ext 3, (1<<8) - 2, 127
     end
 
-    skip "ext 16" do
+    it "ext 16" do
+      check_ext 4, (1<<16) - 1, -128
+      check_ext 4, (1<<8), 1
+      check_ext 4, (1<<16) - 2, 127
     end
 
-    skip "ext 32" do
+    it "ext 32" do
+      check_ext 6, (1<<20), -128
+      check_ext 6, (1<<16), 1
+      check_ext 6, (1<<16), 127
+    end
+
+    it "extended type 1 with payload aa" do
+      obj = MessagePack::Extended.new(1, "aa")
+      match obj, "\xd5\x01aa"
+    end
+
+    it "extended type 1 with payload aaaa" do
+      obj = MessagePack::Extended.new(1, "aaaa")
+      match obj, "\xd6\x01aaaa"
+    end
+
+    it "extended type 1 with payload aaaa" do
+      obj = MessagePack::Extended.new(1, "aaaa")
+      match obj, "\xd6\x01aaaa"
+    end
+
+    it "extended type 1 with payload aaaaaaaa" do
+      obj = MessagePack::Extended.new(1, "aaaaaaaa")
+      match obj, "\xd7\x01aaaaaaaa"
+    end
+
+    it "extended type 1 with a payload of 2^8 - 1 bytes" do
+      size = (1<<8) - 1
+      obj = MessagePack::Extended.new(1, "a" * size)
+      match obj, "\xc7\xff\x01" << ("a" * size)
+    end
+
+    it "extended type 1 with a payload of 2^16 - 1 bytes" do
+      size = (1<<16) - 1
+      obj = MessagePack::Extended.new(1, "a" * size)
+      match obj, "\xc8\xff\xff\x01" << ("a" * size)
+    end
+
+    it "extended type 1 with a payload of 2^16 - 2 bytes" do
+      size = (1<<16) - 2
+      obj = MessagePack::Extended.new(1, "a" * size)
+      match obj, "\xc8\xff\xfe\x01" << ("a" * size)
+    end
+
+    it "extended type 1 with a payload of 2^16" do
+      size = (1<<16)
+      obj = MessagePack::Extended.new(1, "a" * size)
+      match obj, "\xc9\x00\x01\x00\x00\x01" << ("a" * size)
+    end
+
+    it "extended type 1 with a payload of 2^16 + 1" do
+      size = (1<<16) + 1
+      obj = MessagePack::Extended.new(1, "a" * size)
+      match obj, "\xc9\x00\x01\x00\x01\x01" << ("a" * size)
     end
   end
+
+## FIXME
+#  it "{0=>0, 1=>1, ..., 14=>14}" do
+#    a = (0..14).to_a;
+#    match Hash[*a.zip(a).flatten], "\x8f\x05\x05\x0b\x0b\x00\x00\x06\x06\x0c\x0c\x01\x01\x07\x07\x0d\x0d\x02\x02\x08\x08\x0e\x0e\x03\x03\x09\x09\x04\x04\x0a\x0a"
+#  end
+#
+#  it "{0=>0, 1=>1, ..., 15=>15}" do
+#    a = (0..15).to_a;
+#    match Hash[*a.zip(a).flatten], "\xde\x00\x10\x05\x05\x0b\x0b\x00\x00\x06\x06\x0c\x0c\x01\x01\x07\x07\x0d\x0d\x02\x02\x08\x08\x0e\x0e\x03\x03\x09\x09\x0f\x0f\x04\x04\x0a\x0a"
+#  end
+
+## FIXME
+#  it "fixmap" do
+#    check_map 1, 0
+#    check_map 1, (1<<4)-1
+#  end
+#
+#  it "map 16" do
+#    check_map 3, (1<<4)
+#    check_map 3, (1<<16)-1
+#  end
+#
+#  it "map 32" do
+#    check_map 5, (1<<16)
+#    #check_map 5, (1<<32)-1  # memory error
+#  end
 
   def check(map)
     map.each do |native, packed|
@@ -239,6 +341,20 @@ describe MessagePack do
     packed = ''
     (0...n).each { |i|  packed += i.to_msgpack + 42.to_msgpack }
     packed
+  end
+
+  def check_ext(overhead, num, type)
+    len = num+overhead
+    obj = MessagePack::Extended.new(type, "a" * num)
+
+    raw = obj.to_msgpack.to_s
+    raw.length.should == len
+    MessagePack.unpack(raw).should == obj
+  end
+
+  def match(obj, buf)
+    raw = obj.to_msgpack.to_s
+    raw.should == buf
   end
 end
 
